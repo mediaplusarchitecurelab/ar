@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
 	<title>Hello, AR Cube!</title>
 	<!-- include three.js library -->
@@ -22,17 +23,147 @@
 -->
 
 <script>
+	const ssnodeurl = 'https://spreadsheets.google.com/feeds/list/1l3DvxzJxmCPyk3TruBMCC_YXWEvRJXnkwaKcx41IoKA/1/public/values?alt=json';
+	const sscrvurl = 'https://spreadsheets.google.com/feeds/list/1l3DvxzJxmCPyk3TruBMCC_YXWEvRJXnkwaKcx41IoKA/2/public/values?alt=json';
+	const qrxy = 1.00/80;	// qrcode 大小 單位為 mm 
 
 	var scene, camera, renderer, clock, deltaTime, totalTime;
 	var arToolkitSource, arToolkitContext;
 	var markerRoot1, markerRoot2;
-	var mesh1;
 
-	initialize();
-	animate();
+	var nodelist=[];
+	var crvlist=[];
+
+	var pipeDegree = 20; // default as 64
+    var pipeSize = 1*qrxy;
+    var pipeRacial = 4;
+    var pipeClose = false;
+
+	preload();
+
+	function preload(){
+        // load url1
+        fetch(ssnodeurl)
+            .then((response)=>{
+            return response.text();
+        }).then((data)=>{
+            // do url1data
+            let val = JSON.parse(data);
+            encodenode(val);            
+        }).catch((error)=>{
+            console.log(error);
+        }).then(()=>{
+        	// after load url1 load url2
+        	fetch(sscrvurl)
+                .then((response2)=>{
+                	return response2.text();
+                }).then((data2)=>{
+                    // do url2data
+                    let val2 = JSON.parse(data2);
+                    encodecrv(val2);
+                }).catch((error2)=>{
+                    console.log(error2);
+            }).then(()=>{
+	        	initialize();
+				animate();
+            });
+        });
+    }
+
+    function encodenode(data){
+    	data.feed.entry.forEach ((val,i)=>{
+    		let nidlocked = val.gsx$locked.$t === '0' ? false : true;
+    		//let object = nidlocked ? new THREE.Mesh( geoMesh, matLocked ) : new THREE.Mesh( geoMesh, matFinished);
+    		let vv = new THREE.Vector3( 
+                parseFloat(val.gsx$x.$t)*qrxy*6,
+                parseFloat(val.gsx$z.$t)*qrxy*6,
+                parseFloat(val.gsx$y.$t)*qrxy*6);
+            let vt = new THREE.Vector3( 
+                parseFloat(val.gsx$nx.$t)*(-1),
+                parseFloat(val.gsx$nz.$t)*(-1),
+                parseFloat(val.gsx$ny.$t)*(-1));
+            let tempmesh = new THREE.Mesh(
+            				new THREE.CubeGeometry(8*qrxy,8*qrxy,8*qrxy),
+            				new THREE.MeshNormalMaterial({
+								transparent: true,
+								opacity: 0.5,
+								side: THREE.DoubleSide
+							}));
+            tempmesh.position.x = vv.x;
+            tempmesh.position.y = vv.y
+            tempmesh.position.z = vv.z;
+            nodelist.push(tempmesh);
+            //let vvtag = makeLabel(i.toString(), 30, vt.clone().multiplyScalar(tagdist).add(vv), tagratio);
+    	});
+    }
+    function encodecrv(data){
+    	data.feed.entry.forEach ((val,i)=>{
+    		let cidlocked = val.gsx$locked.$t === '0' ? false : true; 
+    		let nidlstr = val.gsx$nid.$t.split('^');
+
+    		
+    		// node pickup
+            let npts = [];
+            nidlstr.forEach((v)=>{
+               npts.push(nodelist[parseInt(v)].position);
+            });
+
+    		let spl = new THREE.CatmullRomCurve3(npts);
+            spl.curveType = 'catmullrom';
+            let tub = new THREE.TubeBufferGeometry( spl, pipeDegree, pipeSize, pipeRacial, pipeClose );
+			
+			let tempmesh = new THREE.Mesh(
+            				tub,
+            				new THREE.MeshBasicMaterial({
+            					color: '#00ee00'
+							}));
+            crvlist.push(tempmesh);
+            //let vvtag = makeLabel(i.toString(), 30, vt.clone().multiplyScalar(tagdist).add(vv), tagratio);
+    	});
+    }
+/*
+        let vs = [];
+        
+        let geoMesh = new THREE.SphereBufferGeometry( nodeSize );
+        geoMesh.castShadow = true;
+        //geoVtMesh = new THREE.InstancedMesh( geoVertics, matFinished, count );
+        for (let i = 0; i < data.feed.entry.length; i+=1) {
+
+            let nidlocked = data.feed.entry[i].gsx$locked.$t === '0' ? false : true;
+
+            let object = nidlocked ? new THREE.Mesh( geoMesh, matLocked ) : new THREE.Mesh( geoMesh, matFinished);
+            let vv = new THREE.Vector3( 
+                parseFloat(data.feed.entry[i].gsx$x.$t),
+                parseFloat(data.feed.entry[i].gsx$z.$t),
+                parseFloat(data.feed.entry[i].gsx$y.$t));
+            let vt = new THREE.Vector3( 
+                parseFloat(data.feed.entry[i].gsx$nx.$t)*(-1),
+                parseFloat(data.feed.entry[i].gsx$nz.$t)*(-1),
+                parseFloat(data.feed.entry[i].gsx$ny.$t)*(-1));
+            let vvtag = makeLabel(i.toString(), 30, vt.clone().multiplyScalar(tagdist).add(vv), tagratio);
+            object.position.x = vv.x;
+            object.position.z = vv.z;
+            object.position.y = vv.y;
+
+            vv.userData={
+                "object":object,
+                "tag": vvtag,
+                "tagnormal": vt,
+                "locked": nidlocked,
+                "parent":[] // not setted right now
+            };
+
+            scene.add(object);
+            //scene.add(vvtag);
+            geoVmap.push(vv);
+        }
+        //geoVmap = vs;
+*/
+    //}
 
 	function initialize()
 	{
+
 		////////////////////////////////////////////////////////////
 		// setup scene
 		////////////////////////////////////////////////////////////
@@ -115,6 +246,7 @@
 		////////////////////////////////////////////////////////////
 		// build geometry
 		////////////////////////////////////////////////////////////
+		/*
 		let geometry1	= new THREE.CubeGeometry(1,1,1);
 		let material1	= new THREE.MeshNormalMaterial({
 			transparent: true,
@@ -124,9 +256,21 @@
 		
 		mesh1 = new THREE.Mesh( geometry1, material1 );
 		mesh1.position.y = 0.5;
-		
+		*/
+		console.log(nodelist[3].position);
 		//apply pattern
-		markerRoot1.add( mesh1 );
+		//markerRoot1.add( mesh1 );
+		//console.log(nodelist[0]);
+		//markerRoot1.add( nodelist[0] );
+		
+		nodelist.forEach((m)=>{
+			markerRoot1.add( m );
+		});
+
+		crvlist.forEach((c)=>{
+			markerRoot1.add( c );
+		});
+		
 	}
 
 
