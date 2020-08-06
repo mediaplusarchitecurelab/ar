@@ -4,17 +4,17 @@
 	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
 	<title>Hello, AR Cube!</title>
 	<!-- include three.js library -->
-	<script src='js/three.js'></script>
+	<script type="text/javascript" src='js/three.js'></script>
 	<!-- include jsartookit -->
-	<script src="jsartoolkit5/artoolkit.min.js"></script>
-	<script src="jsartoolkit5/artoolkit.api.js"></script>
+	<script type="text/javascript" src="jsartoolkit5/artoolkit.min.js"></script>
+	<script type="text/javascript" src="jsartoolkit5/artoolkit.api.js"></script>
 	<!-- include threex.artoolkit -->
-	<script src="threex/threex-artoolkitsource.js"></script>
-	<script src="threex/threex-artoolkitcontext.js"></script>
-	<script src="threex/threex-arbasecontrols.js"></script>
-	<script src="threex/threex-armarkercontrols.js"></script>
+	<script type="text/javascript" src="threex/threex-artoolkitsource.js"></script>
+	<script type="text/javascript" src="threex/threex-artoolkitcontext.js"></script>
+	<script type="text/javascript" src="threex/threex-arbasecontrols.js"></script>
+	<script type="text/javascript" src="threex/threex-armarkercontrols.js"></script>
+	<script type="text/javascript" src="dat/dat.gui.min.js"></script>
 </head>
-
 <body style='margin : 0px; overflow: hidden; font-family: Monospace;'>
 
 <!-- 
@@ -23,25 +23,53 @@
 -->
 
 <script>
-	const ssnodeurl = 'https://spreadsheets.google.com/feeds/list/1l3DvxzJxmCPyk3TruBMCC_YXWEvRJXnkwaKcx41IoKA/1/public/values?alt=json';
-	const sscrvurl = 'https://spreadsheets.google.com/feeds/list/1l3DvxzJxmCPyk3TruBMCC_YXWEvRJXnkwaKcx41IoKA/2/public/values?alt=json';
-	const qrxy = 1.00/80;	// qrcode 大小 單位為 mm 
+	
+    const qrxy = 1.00/500;	// qrcode 大小 單位為 mm 
 
-	var scene, camera, renderer, clock, deltaTime, totalTime;
-	var arToolkitSource, arToolkitContext;
-	var markerRoot1, markerRoot2;
-
-	var nodelist=[];
-	var crvlist=[];
-
-	var pipeDegree = 20; // default as 64
-    var pipeSize = 1*qrxy;
+    var obj = {
+		team: 'team_1',
+		applyteam: function () {
+			preload(obj.team.split('_')[1]);
+		},
+		jointSize:6,
+		pipeColor: [ 0, 128, 255 ],
+	};
+	var jointSizetemp = obj.jointSize;
+    var pipeDegree = 20; // default as 64
+    var pipeSize = 3*qrxy;
     var pipeRacial = 4;
     var pipeClose = false;
 
-	preload();
+    var jointSize =obj.jointSize*qrxy;
 
-	function preload(){
+
+
+    // Objects
+    var scene =null;
+    var camera, renderer, clock, deltaTime, totalTime;
+	var arToolkitSource, arToolkitContext;
+	var markerRoot1, markerRoot2;
+	var nodelist=[];
+	var crvlist=[];
+
+	// GUI
+	var gui=null;
+
+	
+
+
+	preload("1");
+	
+	// Load
+	
+	function preload(val){
+		if (scene!==null){
+			scene.remove.apply(scene, scene.children);
+		}
+
+		const ssnodeurl = 'https://spreadsheets.google.com/feeds/list/1l3DvxzJxmCPyk3TruBMCC_YXWEvRJXnkwaKcx41IoKA/'+(parseInt(val)*2+1).toString()+'/public/values?alt=json';
+		const sscrvurl = 'https://spreadsheets.google.com/feeds/list/1l3DvxzJxmCPyk3TruBMCC_YXWEvRJXnkwaKcx41IoKA/'+(parseInt(val)*2+2).toString()+'/public/values?alt=json';
+
         // load url1
         fetch(ssnodeurl)
             .then((response)=>{
@@ -64,13 +92,16 @@
                 }).catch((error2)=>{
                     console.log(error2);
             }).then(()=>{
-	        	initialize();
-				animate();
+            	alert(obj.team +'model were loaded!!');
+            	initialize();
+				animate();	        	
             });
         });
     }
 
     function encodenode(data){
+    	nodelist=[];// clear data
+
     	data.feed.entry.forEach ((val,i)=>{
     		let nidlocked = val.gsx$locked.$t === '0' ? false : true;
     		//let object = nidlocked ? new THREE.Mesh( geoMesh, matLocked ) : new THREE.Mesh( geoMesh, matFinished);
@@ -83,7 +114,7 @@
                 parseFloat(val.gsx$nz.$t)*(-1),
                 parseFloat(val.gsx$ny.$t)*(-1));
             let tempmesh = new THREE.Mesh(
-            				new THREE.CubeGeometry(8*qrxy,8*qrxy,8*qrxy),
+            				new THREE.CubeGeometry(jointSize,jointSize,jointSize),
             				new THREE.MeshNormalMaterial({
 								transparent: true,
 								opacity: 0.5,
@@ -93,15 +124,14 @@
             tempmesh.position.y = vv.y
             tempmesh.position.z = vv.z;
             nodelist.push(tempmesh);
-            //let vvtag = makeLabel(i.toString(), 30, vt.clone().multiplyScalar(tagdist).add(vv), tagratio);
     	});
     }
     function encodecrv(data){
+    	crvlist=[];// clear data
+
     	data.feed.entry.forEach ((val,i)=>{
     		let cidlocked = val.gsx$locked.$t === '0' ? false : true; 
     		let nidlstr = val.gsx$nid.$t.split('^');
-
-    		
     		// node pickup
             let npts = [];
             nidlstr.forEach((v)=>{
@@ -111,158 +141,129 @@
     		let spl = new THREE.CatmullRomCurve3(npts);
             spl.curveType = 'catmullrom';
             let tub = new THREE.TubeBufferGeometry( spl, pipeDegree, pipeSize, pipeRacial, pipeClose );
-			
 			let tempmesh = new THREE.Mesh(
             				tub,
             				new THREE.MeshBasicMaterial({
-            					color: '#00ee00'
+            					color: new THREE.Color('rgb('+obj.pipeColor[0].toString()+','+obj.pipeColor[1].toString()+','+obj.pipeColor[2].toString()+')')
 							}));
             crvlist.push(tempmesh);
-            //let vvtag = makeLabel(i.toString(), 30, vt.clone().multiplyScalar(tagdist).add(vv), tagratio);
     	});
     }
-/*
-        let vs = [];
-        
-        let geoMesh = new THREE.SphereBufferGeometry( nodeSize );
-        geoMesh.castShadow = true;
-        //geoVtMesh = new THREE.InstancedMesh( geoVertics, matFinished, count );
-        for (let i = 0; i < data.feed.entry.length; i+=1) {
-
-            let nidlocked = data.feed.entry[i].gsx$locked.$t === '0' ? false : true;
-
-            let object = nidlocked ? new THREE.Mesh( geoMesh, matLocked ) : new THREE.Mesh( geoMesh, matFinished);
-            let vv = new THREE.Vector3( 
-                parseFloat(data.feed.entry[i].gsx$x.$t),
-                parseFloat(data.feed.entry[i].gsx$z.$t),
-                parseFloat(data.feed.entry[i].gsx$y.$t));
-            let vt = new THREE.Vector3( 
-                parseFloat(data.feed.entry[i].gsx$nx.$t)*(-1),
-                parseFloat(data.feed.entry[i].gsx$nz.$t)*(-1),
-                parseFloat(data.feed.entry[i].gsx$ny.$t)*(-1));
-            let vvtag = makeLabel(i.toString(), 30, vt.clone().multiplyScalar(tagdist).add(vv), tagratio);
-            object.position.x = vv.x;
-            object.position.z = vv.z;
-            object.position.y = vv.y;
-
-            vv.userData={
-                "object":object,
-                "tag": vvtag,
-                "tagnormal": vt,
-                "locked": nidlocked,
-                "parent":[] // not setted right now
-            };
-
-            scene.add(object);
-            //scene.add(vvtag);
-            geoVmap.push(vv);
-        }
-        //geoVmap = vs;
-*/
-    //}
+    
 
 	function initialize()
 	{
+		if (gui===null){
+			////////////////////////////////////////////////////////////
+			// setup scene
+			////////////////////////////////////////////////////////////
+			scene = new THREE.Scene();
 
-		////////////////////////////////////////////////////////////
-		// setup scene
-		////////////////////////////////////////////////////////////
-		scene = new THREE.Scene();
+			let ambientLight = new THREE.AmbientLight( 0xcccccc, 0.5 );
+			scene.add( ambientLight );
+						
+			camera = new THREE.Camera();
+			scene.add(camera);
 
-		let ambientLight = new THREE.AmbientLight( 0xcccccc, 0.5 );
-		scene.add( ambientLight );
-					
-		camera = new THREE.Camera();
-		scene.add(camera);
+			renderer = new THREE.WebGLRenderer({
+				antialias : true,
+				alpha: true
+			});
+			renderer.setClearColor(new THREE.Color('lightgrey'), 0)
+			renderer.setSize( 640, 480 );
+			renderer.domElement.style.position = 'absolute'
+			renderer.domElement.style.top = '0px'
+			renderer.domElement.style.left = '0px'
+			document.body.appendChild( renderer.domElement );
 
-		renderer = new THREE.WebGLRenderer({
-			antialias : true,
-			alpha: true
-		});
-		renderer.setClearColor(new THREE.Color('lightgrey'), 0)
-		renderer.setSize( 640, 480 );
-		renderer.domElement.style.position = 'absolute'
-		renderer.domElement.style.top = '0px'
-		renderer.domElement.style.left = '0px'
-		document.body.appendChild( renderer.domElement );
+			clock = new THREE.Clock();
+			deltaTime = 0;
+			totalTime = 0;
+			
+			////////////////////////////////////////////////////////////
+			// setup arToolkitSource
+			////////////////////////////////////////////////////////////
 
-		clock = new THREE.Clock();
-		deltaTime = 0;
-		totalTime = 0;
-		
-		////////////////////////////////////////////////////////////
-		// setup arToolkitSource
-		////////////////////////////////////////////////////////////
+			arToolkitSource = new THREEx.ArToolkitSource({
+				sourceType : 'webcam',
+			});
 
-		arToolkitSource = new THREEx.ArToolkitSource({
-			sourceType : 'webcam',
-		});
-
-		function onResize()
-		{
-			arToolkitSource.onResize()	
-			arToolkitSource.copySizeTo(renderer.domElement)	
-			if ( arToolkitContext.arController !== null )
+			function onResize()
 			{
-				arToolkitSource.copySizeTo(arToolkitContext.arController.canvas)	
-			}	
+				arToolkitSource.onResize()	
+				arToolkitSource.copySizeTo(renderer.domElement)	
+				if ( arToolkitContext.arController !== null )
+				{
+					arToolkitSource.copySizeTo(arToolkitContext.arController.canvas)	
+				}	
+			}
+
+			arToolkitSource.init(function onReady(){
+				onResize()
+			});
+			
+			// handle resize event
+			window.addEventListener('resize', function(){
+				onResize()
+			});
+			
+			////////////////////////////////////////////////////////////
+			// setup arToolkitContext
+			////////////////////////////////////////////////////////////	
+
+			// create atToolkitContext
+			arToolkitContext = new THREEx.ArToolkitContext({
+				cameraParametersUrl: 'data/camera_para.dat',
+				detectionMode: 'mono'
+			});
+			
+			// copy projection matrix to camera when initialization complete
+			arToolkitContext.init( function onCompleted(){
+				camera.projectionMatrix.copy( arToolkitContext.getProjectionMatrix() );
+			});
+
+			////////////////////////////////////////////////////////////
+			// setup markerRoots
+			////////////////////////////////////////////////////////////
+
+			// build markerControls
+			markerRoot1 = new THREE.Group();
+			scene.add(markerRoot1);
+			let markerControls1 = new THREEx.ArMarkerControls(arToolkitContext, markerRoot1, {
+				type: 'pattern', patternUrl: "data/hiro.patt",
+			})	//pattern
+
+			////////////////////////////////////////////////////////////
+			// init GUI
+			////////////////////////////////////////////////////////////
+			// GUI content
+			gui = new dat.gui.GUI();					
+			// GUI into
+			gui.add(obj, 'team', [ 'team_1', 'team_2'] );
+			gui.add(obj, 'applyteam');
+			
+			gui.add(obj, 'jointSize').min(5).max(50).step(0.5).onChange((val)=> {
+			    nodelist.forEach((m)=>{
+					m.geometry = new THREE.CubeGeometry(val*qrxy,val*qrxy,val*qrxy);
+				});
+			 });
+
+			gui.addColor(obj, 'pipeColor').onChange((val)=> {
+				//console.log(val);
+				let nm = new THREE.MeshBasicMaterial({
+            					color: new THREE.Color(val[0],val[1],val[2])
+							});
+				console.log(nm);
+			    crvlist.forEach((m)=>{
+					m.material = nm;
+					m.material.needsUpdate = true;
+				});
+			 });
 		}
-
-		arToolkitSource.init(function onReady(){
-			onResize()
-		});
-		
-		// handle resize event
-		window.addEventListener('resize', function(){
-			onResize()
-		});
-		
 		////////////////////////////////////////////////////////////
-		// setup arToolkitContext
-		////////////////////////////////////////////////////////////	
-
-		// create atToolkitContext
-		arToolkitContext = new THREEx.ArToolkitContext({
-			cameraParametersUrl: 'data/camera_para.dat',
-			detectionMode: 'mono'
-		});
-		
-		// copy projection matrix to camera when initialization complete
-		arToolkitContext.init( function onCompleted(){
-			camera.projectionMatrix.copy( arToolkitContext.getProjectionMatrix() );
-		});
-
-		////////////////////////////////////////////////////////////
-		// setup markerRoots
+		// apply geometry to marker
 		////////////////////////////////////////////////////////////
 
-		// build markerControls
-		markerRoot1 = new THREE.Group();
-		scene.add(markerRoot1);
-		let markerControls1 = new THREEx.ArMarkerControls(arToolkitContext, markerRoot1, {
-			type: 'pattern', patternUrl: "data/hiro.patt",
-		})	//pattern
-
-		////////////////////////////////////////////////////////////
-		// build geometry
-		////////////////////////////////////////////////////////////
-		/*
-		let geometry1	= new THREE.CubeGeometry(1,1,1);
-		let material1	= new THREE.MeshNormalMaterial({
-			transparent: true,
-			opacity: 0.5,
-			side: THREE.DoubleSide
-		}); 
-		
-		mesh1 = new THREE.Mesh( geometry1, material1 );
-		mesh1.position.y = 0.5;
-		*/
-		console.log(nodelist[3].position);
-		//apply pattern
-		//markerRoot1.add( mesh1 );
-		//console.log(nodelist[0]);
-		//markerRoot1.add( nodelist[0] );
-		
 		nodelist.forEach((m)=>{
 			markerRoot1.add( m );
 		});
@@ -270,7 +271,7 @@
 		crvlist.forEach((c)=>{
 			markerRoot1.add( c );
 		});
-		
+
 	}
 
 
@@ -279,6 +280,9 @@
 		// update artoolkit on every frame
 		if ( arToolkitSource.ready !== false )
 			arToolkitContext.update( arToolkitSource.domElement );
+
+		//gui1_team.updateDisplay();
+		//gui1_teamapply.updateDisplay();
 	}
 
 
@@ -298,6 +302,5 @@
 	}
 
 </script>
-
 </body>
 </html>
