@@ -180,7 +180,38 @@
 			deltaTime = 0;
 			totalTime = 0;
 			
+			
+
 			////////////////////////////////////////////////////////////
+			// init GUI
+			////////////////////////////////////////////////////////////
+			// GUI content
+			gui = new dat.gui.GUI();					
+			// GUI into
+			gui.add(obj, 'team', [ 'team_1', 'team_2'] );
+			gui.add(obj, 'applyteam');
+			
+			gui.add(obj, 'jointSize').min(5).max(50).step(0.5).onChange((val)=> {
+			    nodelist.forEach((m)=>{
+					m.geometry = new THREE.CubeGeometry(val*qrxy,val*qrxy,val*qrxy);
+				});
+			 });
+
+			gui.addColor(obj, 'pipeColor').onChange((val)=> {
+				//console.log(val);
+				let nm = new THREE.MeshBasicMaterial({
+            					color: new THREE.Color(val[0],val[1],val[2])
+							});
+				console.log(nm);
+			    crvlist.forEach((m)=>{
+					m.material = nm;
+					m.material.needsUpdate = true;
+				});
+			 });
+		}
+
+
+		////////////////////////////////////////////////////////////
 			// setup arToolkitSource
 			////////////////////////////////////////////////////////////
 
@@ -232,34 +263,7 @@
 			let markerControls1 = new THREEx.ArMarkerControls(arToolkitContext, markerRoot1, {
 				type: 'pattern', patternUrl: "data/hiro.patt",
 			})	//pattern
-
-			////////////////////////////////////////////////////////////
-			// init GUI
-			////////////////////////////////////////////////////////////
-			// GUI content
-			gui = new dat.gui.GUI();					
-			// GUI into
-			gui.add(obj, 'team', [ 'team_1', 'team_2'] );
-			gui.add(obj, 'applyteam');
-			
-			gui.add(obj, 'jointSize').min(5).max(50).step(0.5).onChange((val)=> {
-			    nodelist.forEach((m)=>{
-					m.geometry = new THREE.CubeGeometry(val*qrxy,val*qrxy,val*qrxy);
-				});
-			 });
-
-			gui.addColor(obj, 'pipeColor').onChange((val)=> {
-				//console.log(val);
-				let nm = new THREE.MeshBasicMaterial({
-            					color: new THREE.Color(val[0],val[1],val[2])
-							});
-				console.log(nm);
-			    crvlist.forEach((m)=>{
-					m.material = nm;
-					m.material.needsUpdate = true;
-				});
-			 });
-		}
+		
 		////////////////////////////////////////////////////////////
 		// apply geometry to marker
 		////////////////////////////////////////////////////////////
@@ -271,7 +275,7 @@
 		crvlist.forEach((c)=>{
 			markerRoot1.add( c );
 		});
-
+		console.log(nodelist.length);
 	}
 
 
@@ -280,9 +284,6 @@
 		// update artoolkit on every frame
 		if ( arToolkitSource.ready !== false )
 			arToolkitContext.update( arToolkitSource.domElement );
-
-		//gui1_team.updateDisplay();
-		//gui1_teamapply.updateDisplay();
 	}
 
 
