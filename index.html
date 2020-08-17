@@ -29,6 +29,7 @@
     const qrxy = 1.00/500;	// qrcode 大小 單位為 mm 
     var selid = 0;
     var seltype = '';
+    var selpath = '';
 
     var obj = {
 		//team: 'team_1',
@@ -40,6 +41,7 @@
 					selid +=1;
 				}
 				seltype= statelist[selid].type;
+				selpath= statelist[selid].path;
 				applychange();
 			}
 		},
@@ -51,6 +53,7 @@
 					selid -=1;
 				}
 				seltype= statelist[selid].type;
+				selpath= statelist[selid].path;
 				applychange();
 			}
 		},
@@ -61,8 +64,8 @@
 	};
 
 	var selFolder, jointFolder;
-	var selFolderEl1, selFolderEl2;
-	var El1content, El2content;
+	var selFolderEl1, selFolderEl2, selFolderEl3;
+	var El1content, El2content, El3content;
 
 	var jointSizetemp = obj.jointSize;
     var pipeDegree = 20; // default as 64
@@ -126,6 +129,7 @@
                 parseFloat(val.gsx$z.$t),
                 parseFloat(val.gsx$y.$t));
     		let vc = val.gsx$type.$t;
+    		let vp = 'data/markers/'+val.gsx$path.$t;
     		let valc = [0,0,0];
     		if (vc==='wear'){
     			valc=[obj.wearColor[0],obj.wearColor[1],obj.wearColor[2]];
@@ -144,6 +148,7 @@
             tempmesh.position.z = vv.z;
             statelist.push({
             	type:vc,
+            	path:vp,
             	mesh:tempmesh});
     	});
     }
@@ -196,12 +201,21 @@
 			selFolderEl2.appendChild(El2content);
 			selFolder.__ul.appendChild( selFolderEl2 );
 
+			selFolderEl3 = document.createElement( 'div' );
+			El3content = document.createElement( 'IMG' );
+			El3content.setAttribute('src', 'data/markers/00.png');
+			El3content.setAttribute('width', '200');
+			El3content.setAttribute('height', '200');
+			El3content.setAttribute('style', 'alignContent:center');
+			selFolderEl3.appendChild(El3content);
+			selFolder.__ul.appendChild( selFolderEl3 );
+
 			selFolder.add(obj, 'pre');
 			selFolder.add(obj, 'next');
 			selFolder.open();
 
 			jointFolder = gui.addFolder("marker");
-			jointFolder.add(obj, 'jointSize').min(0.1).max(0.8).step(0.05).onChange((val)=> {
+			jointFolder.add(obj, 'jointSize').min(0.05).max(0.3).step(0.05).onChange((val)=> {
 			    statelist.forEach((v)=>{
 					v.mesh.geometry = new THREE.CubeGeometry(val,val,val);
 				});
@@ -399,6 +413,7 @@
 			});
 			selid=0;
 			seltype= statelist[selid].type;
+			selpath= statelist[selid].path;
 			applychange();
 
 			loadedstate = 2;
@@ -409,7 +424,30 @@
 
 		selFolder.__ul.children[1].innerText='sel ID: '+selid;
 		selFolder.__ul.children[2].innerText='sel TYPE: '+seltype;
-		
+		let guiw = selFolder.__ul.children[2].offsetWidth;
+
+		selFolder.__ul.children[3].children[0].src=selpath;
+		selFolder.__ul.children[3].children[0].width = guiw;
+		selFolder.__ul.children[3].children[0].height = guiw;
+		/*
+		selFolderEl3 = document.createElement( 'div' );
+			El3content = document.createElement( 'IMG' );
+			El3content.setAttribute('src', 'data/markers/00.png');
+			El3content.setAttribute('width', '200');
+			El3content.setAttribute('height', '200');
+			El3content.setAttribute('style', 'alignContent:center');
+			selFolderEl3.appendChild(El3content);
+			selFolder.__ul.appendChild( selFolderEl3 );
+
+
+		selFolder.__ul.children[3].innerText='sel TYPE: '+seltype;
+		El3content = document.createElement( 'IMG' );
+		El3content.setAttribute('src', statelist[selid].path);
+		El3content.setAttribute('width', '300');
+		El3content.setAttribute('height', '300');
+		selFolderEl3.appendChild(El3content);
+		selFolder.__ul.appendChild( selFolderEl3 );
+		*/
 		// changesize
 		statelist.forEach((v,i)=>{
 				//console.log(v.mesh);
