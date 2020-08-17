@@ -4,7 +4,9 @@
 	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
 	<title>Hello, AR Cube!</title>
 	<!-- include three.js library -->
+
 	<script type="text/javascript" src='js/three.js'></script>
+	<script type="text/javascript" src='js/OBJLoader.js'></script>
 	<!-- include jsartookit -->
 	<script type="text/javascript" src="jsartoolkit5/artoolkit.min.js"></script>
 	<script type="text/javascript" src="jsartoolkit5/artoolkit.api.js"></script>
@@ -16,24 +18,52 @@
 	<script type="text/javascript" src="dat/dat.gui.min.js"></script>
 </head>
 <body style='margin : 0px; overflow: hidden; font-family: Monospace;'>
-
 <!-- 
   Example created by Lee Stemkoski: https://github.com/stemkoski
   Based on the AR.js library and examples created by Jerome Etienne: https://github.com/jeromeetienne/AR.js/
 -->
 
-<script>
-	
+<script type="module">
+	//import {OBJLoader} from '../data/loaders/OBJLoader.js';
+
     const qrxy = 1.00/500;	// qrcode 大小 單位為 mm 
+    var selid = 0;
+    var seltype = '';
 
     var obj = {
-		team: 'team_1',
-		applyteam: function () {
-			preload(obj.team.split('_')[1]);
+		//team: 'team_1',
+		pre: function () {
+			if (statelist.length>0){
+				if (selid===statelist.length-1){
+					selid =0;
+				}else{
+					selid +=1;
+				}
+				seltype= statelist[selid].type;
+				applychange();
+			}
 		},
-		jointSize:6,
-		pipeColor: [ 0, 128, 255 ],
+		next: function () {
+			if (statelist.length>0){
+				if (selid===0){
+					selid =statelist.length-1;
+				}else{
+					selid -=1;
+				}
+				seltype= statelist[selid].type;
+				applychange();
+			}
+		},
+		jointSize:0.15,
+		wearColor: [ 255, 128, 0 ],
+		paintoffColor: [ 255, 128, 255 ],
+		dirtyColor: [ 0, 128, 0 ],
 	};
+
+	var selFolder, jointFolder;
+	var selFolderEl1, selFolderEl2;
+	var El1content, El2content;
+
 	var jointSizetemp = obj.jointSize;
     var pipeDegree = 20; // default as 64
     var pipeSize = 3*qrxy;
@@ -42,114 +72,81 @@
 
     var jointSize =obj.jointSize*qrxy;
 
-
-
     // Objects
+    var loader;
     var scene =null;
     var camera, renderer, clock, deltaTime, totalTime;
 	var arToolkitSource, arToolkitContext;
 	var markerRoot1, markerRoot2;
-	var nodelist=[];
-	var crvlist=[];
+	var statelist=[];
+	//var nodelist=[];
+	//var crvlist=[];
+	var object;
+	var objlist=[];
+
+	var loadedstate = 0;
 
 	// GUI
 	var gui=null;
-
-	
-
-
 	preload("1");
 	
 	// Load
-	
 	function preload(val){
 		if (scene!==null){
 			scene.remove.apply(scene, scene.children);
 		}
-
-		const ssnodeurl = 'https://spreadsheets.google.com/feeds/list/1l3DvxzJxmCPyk3TruBMCC_YXWEvRJXnkwaKcx41IoKA/'+(parseInt(val)*2+1).toString()+'/public/values?alt=json';
-		const sscrvurl = 'https://spreadsheets.google.com/feeds/list/1l3DvxzJxmCPyk3TruBMCC_YXWEvRJXnkwaKcx41IoKA/'+(parseInt(val)*2+2).toString()+'/public/values?alt=json';
+		const ssstateurl = 'https://spreadsheets.google.com/feeds/list/1l3DvxzJxmCPyk3TruBMCC_YXWEvRJXnkwaKcx41IoKA/7/public/values?alt=json';
 
         // load url1
-        fetch(ssnodeurl)
+        fetch(ssstateurl)
             .then((response)=>{
             return response.text();
         }).then((data)=>{
             // do url1data
             let val = JSON.parse(data);
-            encodenode(val);            
+            encodestate(val);            
         }).catch((error)=>{
             console.log(error);
         }).then(()=>{
-        	// after load url1 load url2
-        	fetch(sscrvurl)
-                .then((response2)=>{
-                	return response2.text();
-                }).then((data2)=>{
-                    // do url2data
-                    let val2 = JSON.parse(data2);
-                    encodecrv(val2);
-                }).catch((error2)=>{
-                    console.log(error2);
-            }).then(()=>{
-            	alert(obj.team +'model were loaded!!');
+            	//alert(obj.team +'model were loaded!!');
             	initialize();
 				animate();	        	
-            });
         });
     }
-
-    function encodenode(data){
-    	nodelist=[];// clear data
+    function encodestate(data){
+    	statelist=[];// clear data
+    	
 
     	data.feed.entry.forEach ((val,i)=>{
-    		let nidlocked = val.gsx$locked.$t === '0' ? false : true;
+    		//let nidlocked = val.gsx$locked.$t === '0' ? false : true;
     		//let object = nidlocked ? new THREE.Mesh( geoMesh, matLocked ) : new THREE.Mesh( geoMesh, matFinished);
+
     		let vv = new THREE.Vector3( 
-                parseFloat(val.gsx$x.$t)*qrxy*6,
-                parseFloat(val.gsx$z.$t)*qrxy*6,
-                parseFloat(val.gsx$y.$t)*qrxy*6);
-            let vt = new THREE.Vector3( 
-                parseFloat(val.gsx$nx.$t)*(-1),
-                parseFloat(val.gsx$nz.$t)*(-1),
-                parseFloat(val.gsx$ny.$t)*(-1));
+                parseFloat(val.gsx$x.$t),
+                parseFloat(val.gsx$z.$t),
+                parseFloat(val.gsx$y.$t));
+    		let vc = val.gsx$type.$t;
+    		let valc = [0,0,0];
+    		if (vc==='wear'){
+    			valc=[obj.wearColor[0],obj.wearColor[1],obj.wearColor[2]];
+    		}else if(vc==='dirty'){
+    			valc=[obj.dirtyColor[0],obj.dirtyColor[1],obj.dirtyColor[2]];
+    		}else{
+    			valc=[obj.paintoffColor[0],obj.paintoffColor[1],obj.paintoffColor[2]];
+    		}
             let tempmesh = new THREE.Mesh(
-            				new THREE.CubeGeometry(jointSize,jointSize,jointSize),
-            				new THREE.MeshNormalMaterial({
-								transparent: true,
-								opacity: 0.5,
-								side: THREE.DoubleSide
+            				new THREE.CubeGeometry(obj.jointSize,obj.jointSize,obj.jointSize),
+            				new THREE.MeshBasicMaterial({
+            					color: new THREE.Color(valc[0]/255.0,valc[1]/255.0,valc[2]/255.0)
 							}));
             tempmesh.position.x = vv.x;
-            tempmesh.position.y = vv.y
+            tempmesh.position.y = vv.y;
             tempmesh.position.z = vv.z;
-            nodelist.push(tempmesh);
+            statelist.push({
+            	type:vc,
+            	mesh:tempmesh});
     	});
     }
-    function encodecrv(data){
-    	crvlist=[];// clear data
-
-    	data.feed.entry.forEach ((val,i)=>{
-    		let cidlocked = val.gsx$locked.$t === '0' ? false : true; 
-    		let nidlstr = val.gsx$nid.$t.split('^');
-    		// node pickup
-            let npts = [];
-            nidlstr.forEach((v)=>{
-               npts.push(nodelist[parseInt(v)].position);
-            });
-
-    		let spl = new THREE.CatmullRomCurve3(npts);
-            spl.curveType = 'catmullrom';
-            let tub = new THREE.TubeBufferGeometry( spl, pipeDegree, pipeSize, pipeRacial, pipeClose );
-			let tempmesh = new THREE.Mesh(
-            				tub,
-            				new THREE.MeshBasicMaterial({
-            					color: new THREE.Color('rgb('+obj.pipeColor[0].toString()+','+obj.pipeColor[1].toString()+','+obj.pipeColor[2].toString()+')')
-							}));
-            crvlist.push(tempmesh);
-    	});
-    }
-    
 
 	function initialize()
 	{
@@ -179,8 +176,6 @@
 			clock = new THREE.Clock();
 			deltaTime = 0;
 			totalTime = 0;
-			
-			
 
 			////////////////////////////////////////////////////////////
 			// init GUI
@@ -188,30 +183,130 @@
 			// GUI content
 			gui = new dat.gui.GUI();					
 			// GUI into
-			gui.add(obj, 'team', [ 'team_1', 'team_2'] );
-			gui.add(obj, 'applyteam');
+			//gui.add(obj, 'team', [ 'team_1', 'team_2'] );
+			selFolder = gui.addFolder("select");
 			
-			gui.add(obj, 'jointSize').min(5).max(50).step(0.5).onChange((val)=> {
-			    nodelist.forEach((m)=>{
-					m.geometry = new THREE.CubeGeometry(val*qrxy,val*qrxy,val*qrxy);
+			selFolderEl1 = document.createElement( 'li' );
+			El1content = document.createTextNode("sel ID: ");
+			selFolderEl1.appendChild(El1content);
+			selFolder.__ul.appendChild( selFolderEl1 );
+
+			selFolderEl2 = document.createElement( 'li' );
+			El2content = document.createTextNode("sel TYPE ");			
+			selFolderEl2.appendChild(El2content);
+			selFolder.__ul.appendChild( selFolderEl2 );
+
+			selFolder.add(obj, 'pre');
+			selFolder.add(obj, 'next');
+			selFolder.open();
+
+			jointFolder = gui.addFolder("marker");
+			jointFolder.add(obj, 'jointSize').min(0.1).max(0.8).step(0.05).onChange((val)=> {
+			    statelist.forEach((v)=>{
+					v.mesh.geometry = new THREE.CubeGeometry(val,val,val);
 				});
 			 });
-
-			gui.addColor(obj, 'pipeColor').onChange((val)=> {
+			// change material
+			jointFolder.addColor(obj, 'wearColor').onChange((val)=> {
 				//console.log(val);
 				let nm = new THREE.MeshBasicMaterial({
-            					color: new THREE.Color(val[0],val[1],val[2])
-							});
-				console.log(nm);
-			    crvlist.forEach((m)=>{
-					m.material = nm;
-					m.material.needsUpdate = true;
+            					color: new THREE.Color(val[0]/255.00,val[1]/255.00,val[2]/255.00)
+				});
+				statelist.forEach((v)=>{
+					if (v.type==='wear'){
+						v.mesh.material = nm;
+						v.mesh.material.needsUpdate = true;
+					}
 				});
 			 });
+			jointFolder.addColor(obj, 'dirtyColor').onChange((val)=> {
+				console.log(val);
+				let nm = new THREE.MeshBasicMaterial({
+            					color: new THREE.Color(val[0]/255.00,val[1]/255.00,val[2]/255.00)
+				});
+				statelist.forEach((v)=>{
+					if (v.type==='dirty'){
+						v.mesh.material = nm;
+						v.mesh.material.needsUpdate = true;
+					}
+				});
+			 });
+			jointFolder.addColor(obj, 'paintoffColor').onChange((val)=> {
+				//console.log(val);
+				let nm = new THREE.MeshBasicMaterial({
+            					color: new THREE.Color(val[0]/255.00,val[1]/255.00,val[2]/255.00)
+				});
+				statelist.forEach((v)=>{
+					if (v.type==='paintoff'){
+						v.mesh.material = nm;
+						v.mesh.material.needsUpdate = true;
+					}
+				});
+			 });
+			jointFolder.open();
+			////////////////////////////////////////////////////////////
+			// init NODEL
+			////////////////////////////////////////////////////////////
+				// manager
+				function loadModel() {
+					
+					//if (object!==undefined){
+						//object.traverse( function ( child ) {
+						//	if ( child.isMesh ) {
+						//		child.material.map = texture;
+						//	}
+						//} );
+						//object.position.y = - 95;
+						//scene.add( object );
+						//console.log(object);
+					//}
+					
+				}
+				var manager = new THREE.LoadingManager( loadModel );
+				manager.onProgress = function ( item, loaded, total ) {
+					console.log( item, loaded, total );
+				};
+
+				// texture
+				/*
+				var textureLoader = new THREE.TextureLoader( manager );
+				var texture = textureLoader.load( 'data/textures/uv_grid_opengl.jpg' );
+				*/
+				// model
+				function onProgress( xhr ) {
+					if ( xhr.lengthComputable ) {
+						var percentComplete = xhr.loaded / xhr.total * 100;
+						console.log( 'model ' + Math.round( percentComplete, 2 ) + '% downloaded' );
+					}
+				}
+				function onError() {}
+				// loading				
+				
+				loader = new THREE.OBJLoader();
+				loader.load( 'data/models/obj/wheel.obj', function ( obj ) {
+					object = obj;
+
+					object.traverse( function ( child ) {
+							if ( child.isMesh ) {
+								child.material = new THREE.MeshNormalMaterial({
+									transparent: true,
+									opacity: 0.5,
+									side: THREE.DoubleSide
+								});
+								child.material.needsUpdate = true;
+								let oo = child.clone();
+								objlist.push(oo);
+							}
+						});
+			
+					loadedstate = 1;
+
+				}, onProgress, onError );
+
 		}
 
 
-		////////////////////////////////////////////////////////////
+			////////////////////////////////////////////////////////////
 			// setup arToolkitSource
 			////////////////////////////////////////////////////////////
 
@@ -262,12 +357,12 @@
 			scene.add(markerRoot1);
 			let markerControls1 = new THREEx.ArMarkerControls(arToolkitContext, markerRoot1, {
 				type: 'pattern', patternUrl: "data/pattern-marker.patt",
-			})	//pattern
+			});	//pattern
 		
 		////////////////////////////////////////////////////////////
 		// apply geometry to marker
 		////////////////////////////////////////////////////////////
-
+		/*
 		nodelist.forEach((m)=>{
 			markerRoot1.add( m );
 		});
@@ -275,7 +370,14 @@
 		crvlist.forEach((c)=>{
 			markerRoot1.add( c );
 		});
-		console.log(nodelist.length);
+		*/
+		
+		//objlist.forEach((o,i)=>{
+		//	console.log(i);
+		//	//markerRoot1.add( o );
+		//});
+		
+		//console.log(object);
 	}
 
 
@@ -284,8 +386,40 @@
 		// update artoolkit on every frame
 		if ( arToolkitSource.ready !== false )
 			arToolkitContext.update( arToolkitSource.domElement );
+		if (loadedstate == 1){
+
+			//wheel
+			objlist.forEach((o)=>{
+				markerRoot1.add( o );
+			});
+			//joint
+			statelist.forEach((v)=>{
+				//console.log(v.mesh);
+				markerRoot1.add( v.mesh );
+			});
+			selid=0;
+			seltype= statelist[selid].type;
+			applychange();
+
+			loadedstate = 2;
+		}
 	}
 
+	function applychange(){
+
+		selFolder.__ul.children[1].innerText='sel ID: '+selid;
+		selFolder.__ul.children[2].innerText='sel TYPE: '+seltype;
+		
+		// changesize
+		statelist.forEach((v,i)=>{
+				//console.log(v.mesh);
+				if (i===selid){
+					v.mesh.geometry = new THREE.CubeGeometry(obj.jointSize*3,obj.jointSize*3,obj.jointSize*3);
+				}else{
+					v.mesh.geometry = new THREE.CubeGeometry(obj.jointSize,obj.jointSize,obj.jointSize);
+				}
+		});
+	}
 
 	function render()
 	{
